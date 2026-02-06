@@ -32,6 +32,7 @@ class StudentGymEnvConfig(BaseModel):
     auto_reset: bool = True
     timeout: float = 30.0
     prod: bool = True  # Production mode: hide internal information
+    step_size: int = 1 # Number of simulation steps to compute per environment step
 
 
 class StudentGymEnv(gym.Env):
@@ -136,7 +137,8 @@ class StudentGymEnv(gym.Env):
             env_config = {
                 'env_type': self.config.env_type,
                 'max_steps_per_episode': self.config.max_steps_per_episode,
-                'auto_reset': self.config.auto_reset
+                'auto_reset': self.config.auto_reset,
+                'step_size': self.config.step_size
             }
             
             try:
@@ -274,19 +276,28 @@ class StudentGymEnv(gym.Env):
             logger.error(f"Failed to reset episode {self.episode_id}: {e}")
             raise RuntimeError(f"Could not reset episode: {str(e)}")
 
-    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict]:
+    def step(self, action: int, step_size: Optional[int] = None, return_all_states: bool = False) -> Tuple[np.ndarray, float, bool, bool, Dict]:
         """
         Take a step in the environment.
 
         Args:
             action: Action to take (0=do nothing, 1=repair, 2=sell)
+            step_size: Number of steps to execute (default: config.step_size, max: 50)
+            return_all_states: If True, returns list of all observations for the steps
 
         Returns:
-            observation: New observation
-            reward: Reward for this step
+            observation: 
+                - Single observation (np.ndarray) if return_all_states=False
+                - List of observations if return_all_states=True
+            reward: Total reward for all steps executed
             terminated: Whether episode is terminated
             truncated: Whether episode was truncated
-            info: Additional information
+            info: Additional information including step_size and return_all_states
+
+        Note:
+            - step_size is guaranteed to be <= 50 for performance
+            - When return_all_states=True, observations are unrolled into a list
+            - Each observation in the list has shape (9,)
         """
         try:
             if self.terminated or self.truncated:
@@ -301,10 +312,15 @@ class StudentGymEnv(gym.Env):
                         {'message': 'Episode already terminated'}
                     )
 
-            # Send step request
+             # Send step request with effective step_size and return_all_states
+            effective_step_size = step_size if step_size is not None else self.config.step_size
+            # Guarantee: step_size cannot be larger than 50
+            effective_step_size = min(effective_step_size, 50)
             step_data = {
                 'episode_id': self.episode_id,
-                'action': int(action)
+                'action': int(action),
+                'step_size': effective_step_size,
+                'return_all_states': return_all_states
             }
 
             response = self.client.post("/api/v1/episode/step", json=step_data)
@@ -314,8 +330,32 @@ class StudentGymEnv(gym.Env):
             observation = response_payload['observation']
             step_info = response_payload['info']
 
-            # Update local state
-            self.current_observation = np.array(observation, dtype=np.float32)
+            # Handle observation unrolling when return_all_states is True
+            if return_all_states and isinstance(observation, list):
+                # Check if observation is a flat list of sensor values or a list of observation arrays
+                if len(observation) > 0 and isinstance(observation[0], (int, float)):
+                    # Server returned flat list of sensor values - need to reshape
+                    # Each observation should have 9 sensor values
+                    num_observations = len(observation) // 9
+                    observations_list = []
+                    for i in range(num_observations):
+                        start_idx = i * 9
+                        end_idx = start_idx + 9
+                        obs_array = np.array(observation[start_idx:end_idx], dtype=np.float32)
+                        observations_list.append(obs_array)
+                else:
+                    # Server returned list of observation arrays
+                    observations_list = [np.array(obs, dtype=np.float32) for obs in observation]
+                
+                final_observation = observations_list
+                # Update current observation to the last state
+                self.current_observation = observations_list[-1] if observations_list else self.current_observation
+            else:
+                # Single observation - convert to numpy array
+                observations_list = None
+                self.current_observation = np.array(observation, dtype=np.float32)
+                final_observation = self.current_observation
+
             reward = float(response_payload['reward'])
             self.terminated = response_payload['terminated']
             self.truncated = response_payload['truncated']
@@ -332,11 +372,13 @@ class StudentGymEnv(gym.Env):
                 'step': self.current_step,
                 'episode_id': self.episode_id,
                 'total_reward': self.total_reward,
+                'return_all_states': return_all_states,
+                'step_size': effective_step_size,
                 **step_info.get('info', {})
             }
 
             return (
-                self.current_observation,
+                final_observation,
                 reward,
                 self.terminated,
                 self.truncated,
@@ -404,6 +446,7 @@ def create_student_gym_env(
     auto_reset: Optional[bool] = None,
     timeout: Optional[float] = None,
     prod: bool = True,
+    step_size: int = 1,
     episode_id: Optional[str] = None,
     session_id: Optional[str] = None
 ) -> StudentGymEnv:
@@ -500,7 +543,8 @@ def create_student_gym_env(
         env_type=config_env_type,
         max_steps_per_episode=config_max_steps,
         auto_reset=config_auto_reset,
-        timeout=config_timeout
+        timeout=config_timeout,
+        step_size=step_size
     )
     
     return StudentGymEnv(
