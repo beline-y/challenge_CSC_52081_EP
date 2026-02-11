@@ -208,7 +208,7 @@ class StudentGymEnv(gym.Env):
                 filtered_info[field] = info[field]
         
         # Remove sensitive internal fields
-        internal_fields = ['degradation', 'max_degradation', 'terminated', 'truncated']
+        internal_fields = [ 'terminated', 'truncated']
         for field in internal_fields:
             if field in info:
                 del info[field]
@@ -276,7 +276,7 @@ class StudentGymEnv(gym.Env):
             logger.error(f"Failed to reset episode {self.episode_id}: {e}")
             raise RuntimeError(f"Could not reset episode: {str(e)}")
 
-    def step(self, action: int, step_size: Optional[int] = None, return_all_states: bool = False) -> Tuple[np.ndarray, float, bool, bool, Dict]:
+    def step(self, action: int, step_size: Optional[int] = 10, return_all_states: bool = False) -> Tuple[np.ndarray, float, bool, bool, Dict]:
         """
         Take a step in the environment.
 
@@ -446,7 +446,7 @@ def create_student_gym_env(
     auto_reset: Optional[bool] = None,
     timeout: Optional[float] = None,
     prod: bool = True,
-    step_size: int = 1,
+    step_size: int = 10,
     episode_id: Optional[str] = None,
     session_id: Optional[str] = None
 ) -> StudentGymEnv:
@@ -517,7 +517,7 @@ def create_student_gym_env(
         return default_value
     
     # Get configuration values with proper priority
-    config_server_url = get_config_value(server_url, 'SERVER_URL', 'http://localhost:8001', str)
+    config_server_url = get_config_value(server_url, 'SERVER_URL', 'http://rlchallenge.orailix.com', str)
     config_user_token = get_config_value(user_token, 'USER_TOKEN', 'student_user', str)
     config_env_type = get_config_value(env_type, 'ENV_TYPE', 'DegradationEnv', str)
     config_max_steps = get_config_value(max_steps_per_episode, 'MAX_STEPS_PER_EPISODE', 1000, int)
@@ -529,7 +529,7 @@ def create_student_gym_env(
         logger.warning(
             "No .env file found and no explicit parameters provided. "
             "Using default values. For better setup, create a .env file with:"
-            "\nSERVER_URL=http://localhost:8001"
+            "\nSERVER_URL=http://rlchallenge.orailix.com"
             "\nUSER_TOKEN=student_user"
             "\nENV_TYPE=DegradationEnv"
             "\nMAX_STEPS_PER_EPISODE=1000"
