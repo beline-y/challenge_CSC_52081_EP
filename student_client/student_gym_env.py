@@ -35,7 +35,7 @@ class StudentGymEnvConfig(BaseModel):
     step_size: int = 10 # Number of simulation steps to compute per environment step
 
 # Client version
-CLIENT_VERSION = "0.1"
+CLIENT_VERSION = "0.2"
 
 class StudentGymEnv(gym.Env):
     """

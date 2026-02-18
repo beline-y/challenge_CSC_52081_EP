@@ -11,7 +11,7 @@ environments.
 
 import logging
 import os
-from typing import Dict, Tuple, Optional, Any, List, Union
+from typing import Dict, Tuple, Optional, List, Union
 import numpy as np
 import gymnasium as gym
 from dotenv import load_dotenv
@@ -40,7 +40,7 @@ class StudentGymEnvVectorizedConfig(BaseModel):
     step_size: int = 10  # Number of simulation steps to compute per environment step
     return_all_states: bool = True  # Return observations for all steps in step_size
 
-CLIENT_VERSION = "0.1"
+CLIENT_VERSION = "0.2"
 
 class StudentGymEnvVectorized(gym.Env):
     """
@@ -203,30 +203,32 @@ class StudentGymEnvVectorized(gym.Env):
 
     def _initialize_episodes(self):
         """Initialize new episodes"""
-        # Create episodes one by one
-        for i in range(self.num_envs):
-            env_config = {
-                'env_type': self.config.env_type,
-                'max_steps_per_episode': self.config.max_steps_per_episode,
-                'auto_reset': self.config.auto_reset,
-                'step_size': self.config.step_size
-            }
+        # Use the dedicated vectorized endpoint to create all episodes at once
+        try:
+            response = self.client.post(
+                "/api/v1/vectorized/episodes/create",
+                json={
+                    'env_config': {
+                        'env_type': self.config.env_type,
+                        'max_steps_per_episode': self.config.max_steps_per_episode,
+                        'auto_reset': self.config.auto_reset,
+                        'step_size': self.config.step_size,
+                        'reward_config': getattr(self.config, 'reward_config', {})
+                    },
+                    'num_envs': self.num_envs
+                },
+                headers={'Session-ID': self.session_id}
+            )
+            response.raise_for_status()
+            result = response.json()
 
-            try:
-                response = self.client.post(
-                    "/api/v1/episode/create",
-                    json=env_config,
-                    headers={'Session-ID': self.session_id}
-                )
-                response.raise_for_status()
-                episode_data = response.json()
+            self.episode_ids = result['episode_ids']
+            logger.info(f"Created vectorized group with {len(self.episode_ids)} episodes")
+            logger.info(f"Vectorized group ID: {result['vectorized_group_id']}")
 
-                self.episode_ids.append(episode_data['episode_id'])
-                logger.info(f"Created new episode {i + 1}/{self.num_envs}: {episode_data['episode_id']}")
-
-            except Exception as e:
-                logger.error(f"Failed to create episode {i + 1}/{self.num_envs}: {e}")
-                raise RuntimeError(f"Could not create episode: {str(e)}")
+        except Exception as e:
+            logger.error(f"Failed to create vectorized episodes: {e}")
+            raise RuntimeError(f"Could not create vectorized episodes: {str(e)}")
 
     def _restore_episodes(self):
         """Restore existing episodes"""
@@ -275,7 +277,7 @@ class StudentGymEnvVectorized(gym.Env):
                 filtered_info[field] = info[field]
 
         # Remove sensitive internal fields
-        internal_fields = ['degradation', 'max_degradation']  # , 'terminated', 'truncated']
+        internal_fields = ['degradation', 'max_degradation']
         for field in internal_fields:
             if field in info:
                 del info[field]
@@ -367,7 +369,7 @@ class StudentGymEnvVectorized(gym.Env):
             logger.error(f"Failed to reset environments: {e}")
             raise RuntimeError(f"Could not reset environments: {str(e)}")
 
-    def step(self, actions: np.ndarray, step_size: Optional[int] = None, return_all_states: Optional[bool] = True) -> \
+    def step(self, actions: np.ndarray, step_size: Optional[int] = None, return_all_states: Optional[bool] = None) -> \
     Tuple[Union[np.ndarray, List[np.ndarray]], np.ndarray, np.ndarray, np.ndarray, List[Dict]]:
         """
         Take a step in all environments.
