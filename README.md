@@ -57,9 +57,7 @@ for step in range(100):
     
     # Get next 10 flight observations
     obs_list, reward, terminated, truncated, info = env.step(
-        action=action,
-        step_size=10,
-        return_all_states=True
+        action=action
     )
     
     if terminated or truncated:
