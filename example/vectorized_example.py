@@ -3,9 +3,7 @@ from student_client.student_gym_env_vectorized import create_student_gym_env_vec
 
 def main():
 
-    env = create_student_gym_env_vectorized(
-        num_envs=4,
-    )
+    env = create_student_gym_env_vectorized(num_envs=4)
 
     print(f"Environment created with {env.num_envs} parallel environments")
     print(f"   Episode IDs: {env.episode_ids}")
