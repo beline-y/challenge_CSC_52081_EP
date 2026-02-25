@@ -7,9 +7,11 @@ Hides internal implementation details while providing standard gym functionality
 
 from .student_gym_env import create_student_gym_env, StudentGymEnv
 from .plotting import plot_observations, plot_rewards
+from .leaderboard import get_leaderboard_score
 
 __version__ = "1.0.1"
 __all__ = [
     'create_student_gym_env', 'StudentGymEnv',
     'plot_observations', 'plot_rewards',
+ 'StudentGymEnv', 'get_leaderboard_score'
 ]

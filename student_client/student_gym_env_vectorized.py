@@ -40,7 +40,7 @@ class StudentGymEnvVectorizedConfig(BaseModel):
     step_size: int = 10  # Number of simulation steps to compute per environment step
     return_all_states: bool = True  # Return observations for all steps in step_size
 
-CLIENT_VERSION = "0.3"
+CLIENT_VERSION = "0.4"
 
 class StudentGymEnvVectorized(gym.Env):
     """
@@ -336,6 +336,16 @@ class StudentGymEnvVectorized(gym.Env):
 
             reset_info = response.json()
 
+            # Check if backend created new episode IDs
+            if 'new_episode_ids' in reset_info and reset_info['new_episode_ids']:
+                new_episode_ids = reset_info['new_episode_ids']
+                # Update our episode IDs list with the new ones
+                for i, new_episode_id in enumerate(new_episode_ids):
+                    if new_episode_id:  # Only update if we got a valid new ID
+                        old_episode_id = self.episode_ids[i]
+                        self.episode_ids[i] = new_episode_id
+                        logger.info(f"🔄 Environment {i} episode ID changed from {old_episode_id} to {new_episode_id}")
+
             # Process results
             observations = []
             infos = []
@@ -623,6 +633,18 @@ class StudentGymEnvVectorized(gym.Env):
             response.raise_for_status()
 
             reset_info = response.json()
+
+            # Check if backend created new episode IDs
+            if 'new_episode_ids' in reset_info and reset_info['new_episode_ids']:
+                new_episode_ids = reset_info['new_episode_ids']
+                # Update our episode IDs list with the new ones
+                for i, new_episode_id in enumerate(new_episode_ids):
+                    if new_episode_id:  # Only update if we got a valid new ID
+                        env_idx = env_indices[i]
+                        old_episode_id = self.episode_ids[env_idx]
+                        self.episode_ids[env_idx] = new_episode_id
+                        logger.info(
+                            f"🔄 Environment {env_idx} episode ID changed from {old_episode_id} to {new_episode_id}")
 
             # Process results
             observations = []

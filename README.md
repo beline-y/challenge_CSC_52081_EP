@@ -44,8 +44,10 @@ USER_TOKEN=your_student_token
 ```python
 from student_client import create_student_gym_env
 
+user_token = 'your_token'
+
 # Automatically loads from .env file
-env = create_student_gym_env()
+env = create_student_gym_env(user_token=user_token)
 
 # Reset environment
 obs, info = env.reset()
@@ -65,6 +67,12 @@ for step in range(100):
 
 # Clean up
 env.close()
+
+# Get your challenge score
+from student_client import get_leaderboard_score
+
+df = get_leaderboard_score(user_token=user_token)
+print(df)
 ```
 
 /!\ Versioning: when intializing your environment, you will be prompted with your operating version, and perhaps if you require to update your environment with the latest version. 

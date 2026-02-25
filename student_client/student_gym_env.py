@@ -35,7 +35,7 @@ class StudentGymEnvConfig(BaseModel):
     step_size: int = 10 # Number of simulation steps to compute per environment step
 
 # Client version
-CLIENT_VERSION = "0.3"
+CLIENT_VERSION = "0.4"
 
 class StudentGymEnv(gym.Env):
     """
@@ -311,6 +311,12 @@ class StudentGymEnv(gym.Env):
             response.raise_for_status()
 
             reset_info = response.json()
+
+            # Check if backend created a new episode ID (only happens if old episode had steps)
+            if 'new_episode_id' in reset_info:
+                old_episode_id = self.episode_id
+                self.episode_id = reset_info['new_episode_id']
+                logger.info(f"🔄 Episode ID changed from {old_episode_id} to {self.episode_id} (old episode had steps)")
 
             # Update local state
             self.current_observation = np.array(reset_info['observation'], dtype=np.float32)
